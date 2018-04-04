@@ -1,0 +1,103 @@
+/* Copyright (c) 2017 MIT 6.813/6.831 course staff, all rights reserved.
+ * Redistribution of original or derived work requires permission of course staff.
+ */
+
+/* REMOVE ME - dashed lines and height for debugging */
+
+body {
+	background: white no-repeat center center fixed; 	
+}
+
+#firstColumn, #lastColumn, #mainColumn {
+	margin: 0 auto;
+	position: relative;
+	text-align: center;
+	height: 620px;
+}
+
+#title {
+	margin-top: 175px;
+	font-weight: bold;
+	color: purple;
+	position: relative;
+	font-style: italic;
+}
+
+#newGame {
+	position: relative;
+}
+
+#scoreText {
+	display: inline-block;
+	font-size: 24px;
+}
+
+#score {
+	font-size: 24px;
+}
+
+#board {
+	width: 320px;
+	height: 320px;
+	margin: 0 auto;
+	position: relative;
+	margin-top: 150px;
+	border-style: none;
+}
+
+#move {
+	margin: 0 auto;
+	position: relative;
+	margin-top: 150px;
+	margin-left: -50px;
+}
+
+#moveText {
+	margin: 0 auto;
+	position: relative;
+	text-align: center;
+	width: 50px;
+}
+
+.arrowButtons {
+	margin: 0 auto;
+	position: relative;
+	border-style: dashed;
+	height: 100px;
+	width: 200px;
+}
+
+.grid {
+	margin-top: 50px;
+	margin-bottom: 50px;
+	display: flex; /* establish flex container */
+	flex-wrap: wrap; /* enable flex items to wrap */
+	justify-content: space-around;
+  
+}
+.cell {
+	flex: 0 0 32%; /* don't grow, don't shrink, width */
+	height: 50px;
+	margin-bottom: 5px;
+}
+
+#upButton, #leftButton, #rightButton, #downButton {
+	margin: 0 auto;
+	height: 50px;
+	width: 50px;
+}
+
+#crushOnce {
+	position: relative;
+	margin: 0 auto;
+	text-align: center;
+}
+
+#lastInput {
+	vertical-align: middle;
+}
+
+#bottomCandyImages {
+	visibility: hidden;
+}
+

@@ -1,0 +1,524 @@
+<!--
+CandyCrush
+Your Name: Harsha Dodda
+Collaborators:
+-->
+<!DOCTYPE html>
+<html>
+<!--
+/* Copyright (c) 2017 MIT 6.813/6.831 course staff, all rights reserved.
+ * Redistribution of original or derived work requires permission of course staff.
+ */
+-->
+
+<!-- 
+TODOs
+show move feature
+-->
+
+<head>
+<meta charset="utf-8">
+<title>CandyCrush</title>
+
+<!-- Load style sheets -->
+<link rel="stylesheet" href=
+  "https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.css">
+
+<link rel="stylesheet" href="mainLayout.css">
+
+<!-- Use mobile-aware viewport -->
+<meta name="viewport" content=
+  "width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<!-- Load any supplemental Javascript libraries here -->
+<script src=
+  "https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src=
+  "https://cdnjs.cloudflare.com/ajax/libs/seedrandom/2.4.2/seedrandom.js">
+</script>
+<script src="candy.js"></script>
+<script src="board.js"></script>
+<script src="rules.js"></script>
+
+<script>
+
+// By default, the first board loaded by your page will be the same 
+// each time you load (which is accomplished by "seeding" the random
+// number generator. This makes testing (and grading!) easier!
+Math.seedrandom(0);
+
+
+
+// A short jQuery extension to read query parameters from the URL.
+$.extend({
+  getUrlVars: function() {
+    var vars = [], pair;
+    var pairs = window.location.search.substr(1).split('&');
+    for (var i = 0; i < pairs.length; i++) {
+      pair = pairs[i].split('=');
+      vars.push(pair[0]);
+      vars[pair[0]] = pair[1] &&
+          decodeURIComponent(pair[1].replace(/\+/g, ' '));
+    }
+    return vars;
+  },
+  getUrlVar: function(name) {
+    return $.getUrlVars()[name];
+  }
+});
+
+// constants
+var DEFAULT_BOARD_SIZE = 8;
+
+var canvas;
+var ctx;
+
+// data model at global scope for easier debugging
+var board;
+var rules;
+var candyArr;
+var size;
+
+// initialize board
+if ($.getUrlVar('size') && $.getUrlVar('size') >= 3) {
+  board = new Board($.getUrlVar('size'));
+} else {
+  board = new Board(DEFAULT_BOARD_SIZE);
+}
+
+// load a rule
+rules = new Rules(board);
+
+// Final initialization entry point: the Javascript code inside this block
+// runs at the end of start-up when the page has finished loading.
+$(document).ready(function()
+{
+  getDefaultBoard();
+});
+
+function getDefaultBoard() {
+  canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.height, canvas.width);
+  drawGrid(320, 320, "canvas");
+  rules.prepareNewGame(board);
+  size = getSingleCellHeightAndWidth();
+  ctx.globalAlpha = 1.0;
+  candyArr = new Array(board.boardSize);
+  for(var i = 0; i < board.boardSize; i++) {
+    candyArr[i] = [];
+    for(var j = 0; j < board.boardSize; j++) {
+      var candy = board.getCandyAt(i, j);
+      candyArr[i][j] = {"x" : i * size, "y" : j * size, "color" : candy.color, "id" : candy.id, "opacity" : ctx.globalAlpha, "dragged" : false};
+    }
+  }
+  updateBoard();
+}
+
+var drawGrid = function(w, h, id) {
+    var canvas = document.getElementById(id);
+    var ctx = canvas.getContext('2d');
+    ctx.canvas.width = w;
+    ctx.canvas.height = h;
+
+    for (x = 0; x <= w; x += getSingleCellHeightAndWidth()) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        for (y = 0; y <= h; y += getSingleCellHeightAndWidth()) {
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+        }
+    }
+    ctx.stroke();
+};
+
+var triX;
+var triY;
+
+function updateBoard() {
+  canvas = document.getElementById("canvas");
+  ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.height, canvas.height);
+  drawGrid(320, 320, "canvas");
+  var size = getSingleCellHeightAndWidth();
+  var candyToDrawLast;
+  var lastRow;
+  var lastCol;
+
+  for(var row = 0; row < board.boardSize; row++) {
+    for(var col = 0; col < board.boardSize; col++) {
+       if(candyArr[row][col].dragged === true) {
+        candyToDrawLast = candyArr[row][col];
+        lastRow = row;
+        lastCol = col;
+       }
+       else if(candyArr[row][col] != undefined) { 
+        drawCandyImage(ctx, row, col); 
+      }    
+    }
+  }
+  
+  if(candyToDrawLast != undefined) {
+    drawCandyImage(ctx, lastRow, lastCol, size, size);
+  }
+  if(triX != undefined && triY != undefined) {
+    drawTriangle(triX, triY, size);
+  }
+  requestAnimationFrame(updateBoard);
+}
+
+function drawCandyImage(ctx, i, j) {
+  ctx.beginPath();
+  var candyImg = getCandyImg(candyArr[i][j].color);
+  var image = new Image(size, size);
+  image.src = candyImg;
+  ctx.globalAlpha = candyArr[i][j].opacity;
+  ctx.drawImage(image, candyArr[i][j].y, candyArr[i][j].x, size, size);
+  ctx.closePath();
+}
+
+var dragRow;
+var dragCol;
+
+var origRow;
+var origCol;
+var origX;
+var origY;
+
+var isCrushing = false;
+var isDragging = false;
+
+$(document).on('mousedown', "#canvas", function(evt) {
+  isDragging = false;
+  if(!isCrushing) {
+    var x = event.offsetX;
+    var y = event.offsetY;
+    var size = getSingleCellHeightAndWidth();
+    console.log(Math.floor(x / size), Math.floor(y / size));
+    dragRow = Math.floor(y / size);
+    dragCol = Math.floor(x / size);
+    origX = x;
+    origY = y;
+    origRow = dragRow;
+    origCol = dragCol;
+    isDragging = true;
+  }
+});
+
+$(document).on('mouseup', function(evt) {
+
+  var targetCol = Math.floor(event.offsetX / size);
+  var targetRow = Math.floor(event.offsetY / size);
+  var changeRow = Math.abs(targetRow - dragRow);
+  var changeCol = Math.abs(targetCol - dragCol);
+  var direction = "";
+  if(changeRow + changeCol === 1) {
+    if(targetRow - dragRow === 1) {
+      direction = "down";
+    }
+    else if(targetRow - dragRow === -1) {
+      direction = "up"
+    }
+    else if(targetCol - dragCol === 1) {
+      direction = "right"
+    }
+    else if(targetCol - dragCol === -1) {
+      direction = "left";
+    }
+    var candy = board.getCandyAt(dragRow, dragCol);
+    if(rules.isMoveTypeValid(candy, direction)) {
+      var candyToFlip = board.getCandyInDirection(candy, direction);
+      board.flipCandies(candy, candyToFlip);
+    }
+  }
+  else {
+    if(origRow != undefined) {
+      isDragging = false;
+      candyArr[origRow][origCol].x = origRow * size;
+      candyArr[origRow][origCol].y = origCol * size;
+      candyArr[origRow][origCol].dragged = false;
+    } 
+  }
+  dragRow = undefined;
+  dragCol = undefined;
+});
+
+$(document).on('mousemove', function(evt) {
+  var x = event.offsetX;
+  var y = event.offsetY;
+  canvas = document.getElementById("canvas");
+  ctx = canvas.getContext("2d");
+  if(dragRow != undefined && dragCol != undefined && isDragging) {
+    candyArr[dragRow][dragRow].dragged = true;
+    candyArr[dragRow][dragCol].x = y;
+    candyArr[dragRow][dragCol].y = x;
+  }
+});
+
+function getCandyImg(candyColor) {
+  var candyImg;
+  switch(candyColor) {
+      case "red":
+        candyImg = "graphics/red-candy.png";
+        break;
+      case "blue":
+        candyImg = "graphics/blue-candy.png";
+        break;
+      case "orange":
+        candyImg = "graphics/orange-candy.png";
+        break;
+      case "purple":
+        candyImg = "graphics/purple-candy.png";
+        break;
+      case "yellow":
+        candyImg = "graphics/yellow-candy.png";
+        break;
+      case "green": 
+        candyImg = "graphics/green-candy.png";
+        break;
+  }
+  return candyImg;
+}
+
+function getSingleCellHeightAndWidth() {
+  return 320 / board.boardSize;
+}
+
+function updateScore(amount, colorLastCrushed) {
+  $("#score").text(amount);
+  $("#score").css("color", colorLastCrushed);
+  $("#scoreText").css("color", colorLastCrushed);
+}
+
+function crushOnce() {
+  rules.removeCrushes(rules.getCandyCrushes());
+  setTimeout(rules.moveCandiesDown, 200);
+}
+
+function fadeOut(candy) {
+  canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext("2d");
+  var size = getSingleCellHeightAndWidth();
+  var candyImg = getCandyImg(candy.color);
+  var image = new Image(size, size);
+  image.src = candyImg;
+  var opacity = 1.0;
+  var itr = 0;
+  var id2;
+  id2 = setInterval(fade, 50);
+  function fade() {
+    if (itr === 4) {
+      clearInterval(id2);
+      ctx.globalAlpha = 1.0;
+      setTimeout(crushOnce, 200);
+      candy = board.getCandyAt(candy.row, candy.col);
+      candyArr[candy.row][candy.col] = {"x" : candy.row * size, "y" : candy.col * size, "color" : candy.color, "id" : candy.id , "opacity" : ctx.globalAlpha, "dragged" : false};
+      itr = 0;
+      triX = undefined;
+      triY = undefined;
+    } 
+    else {
+      ctx.globalAlpha = opacity;
+      candyArr[candy.row][candy.col] = {"x" : candy.row * size, "y" : candy.col * size, "color" : candy.color, "id" : candy.id , "opacity" : ctx.globalAlpha, "dragged" : false};
+      opacity -= 0.25;
+      itr++;
+    }
+  }
+}
+
+
+function showValidMove() {
+  var validMove = rules.getRandomValidMove();
+  var size = getSingleCellHeightAndWidth();
+  var x = ((validMove.candy.col + 1) * size);
+  var y = ((validMove.candy.row + 1) * size);
+  triX = x - size;
+  triY = y - (size / 2);
+  drawTriangle(x - size, y - (size / 2), size);
+  document.getElementById("showMove").disabled = true;
+}
+
+function drawTriangle(x, y, cellSize) {
+  var half = cellSize / 2;
+  var canvas = document.getElementById('canvas');
+  var ctx = canvas.getContext('2d');
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - half, y + half);
+  ctx.lineTo(x - half, y - half);
+  ctx.fill();
+}
+
+$(document).on('click', ".dirButton", function(evt)
+{
+  var whichButton = evt.target.id;
+  var direction = '';
+  var oppdir = '';
+  switch(whichButton) {
+    case 'upButton':
+      direction = 'up';
+      oppdir = 'down';
+      break;
+    case 'leftButton':
+      direction = 'left';
+      oppdir = 'right';
+      break; 
+    case 'rightButton':
+      direction = 'right';
+      oppdir = 'left';
+      break;
+    case 'downButton':
+      direction = 'down';
+      oppdir = 'up';
+      break;
+  }
+
+  var input = document.getElementById('moveText').value;
+  var letter = input.charAt(0);
+  var number = input.charAt(1);
+  var row = number - 1;
+  var col = letter.charCodeAt(0) - 97;
+
+  var candy = board.getCandyAt(row, col);
+  rules.isMoveTypeValid(candy, direction);
+  var candyToFlip = board.getCandyInDirection(candy, direction);
+  board.flipCandies(candy, candyToFlip);
+
+  document.getElementById("showMove").disabled = false;
+  document.getElementById('moveText').value = '';
+  document.getElementById('moveText').focus();
+  document.getElementById("upButton").style.background = '';
+  document.getElementById("leftButton").style.background = '';
+  document.getElementById("rightButton").style.background = '';
+  document.getElementById("downButton").style.background = '';
+});
+
+
+function switchCandiesAnimation(candy, fromRow, fromCol, toRow, toCol) {
+  isCrushing = true;
+  canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext("2d");
+  var size = getSingleCellHeightAndWidth();
+  ctx.globalAlpha = 1.0;
+  var step = size / 10;
+  var startx = fromRow * size;
+  var starty = fromCol * size;
+  var iteration = 0;
+  var id;
+  id = setInterval(frame, 30);
+  function frame() {
+    if (iteration === 10) {
+      clearInterval(id);
+      iteration = 0;
+      candyArr[toRow][toCol] = {"x" : toRow * size, "y" : toCol * size, "color" : candy.color, "id" : candy.id, "opacity" : ctx.globalAlpha, "dragged" : false}; 
+      crushOnce();
+      isCrushing = false;
+      document.getElementById("showMove").disabled = false;
+    } 
+    else {
+      var differencey = ((toCol * size) - (fromCol * size));
+      var differencex = ((toRow * size) - (fromRow * size));
+      candyArr[toRow][toCol] = {"x" :  startx + (differencex * (iteration / 10)), "y" : starty + (differencey * (iteration / 10)), "color" : candy.color, "id" : candy.id, "opacity" : ctx.globalAlpha, "dragged" : false}
+      iteration++;
+    } 
+  }
+}
+
+
+/* Event Handlers */
+// access the candy object with info.candy
+
+// add a candy to the board
+$(board).on('add', function(e, info)
+{
+  if(info.fromRow != undefined) {
+    switchCandiesAnimation(info.candy, info.fromRow, info.fromCol, info.toRow, info.toCol);
+  }
+});
+
+// move a candy on the board
+$(board).on('move', function(e, info)
+{
+  if(info.candy != undefined) {
+    switchCandiesAnimation(info.candy, info.fromRow, info.fromCol, info.toRow, info.toCol);
+  }
+});
+
+// remove a candy from the board
+$(board).on('remove', function(e, info)
+{
+  
+  // fade animation
+  if(info.candy != undefined) {
+    fadeOut(info.candy);
+  }
+});
+
+// move a candy on the board
+$(board).on('scoreUpdate', function(e, info)
+{
+  updateScore(info.score, info.candy.toString());
+});
+
+// Button Events
+$(document).on('click', "#newGame", function(evt)
+{
+  canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.height, canvas.width);
+  board.clear();
+  getDefaultBoard();
+});
+
+</script>
+
+
+</head>
+
+<body>
+
+<div class="container">
+  <div class="row">
+    <div class="col-md-3" id="firstColumn">
+      <!-- Column 1 Code Here -->
+      <div>
+          <h1 id="title">Candy Crush</h1>
+          <br>
+          <button id="newGame" type="button">New Game</button>
+          <br><br>
+          <div id="scoreBackground">
+            <p id="scoreText">Score:</p>
+            <label id="score">0</label>
+          </div>
+          <div>
+            <button id="showMove" type="button" onclick="showValidMove()">Show Move</button>
+          </div>
+          <br>
+          <div id="bottomCandyImages">
+            <img src="graphics/red-candy.png" height="40" width="40">
+            <img src="graphics/blue-candy.png" height="40" width="40">
+            <img src="graphics/purple-candy.png" height="40" width="40">
+            <br>
+            <img src="graphics/green-candy.png" height="40" width="40">
+            <img src="graphics/yellow-candy.png" height="40" width="40">
+            <img src="graphics/orange-candy.png" height="40" width="40">
+          </div>
+      </div>
+    </div>
+
+    <div class="col-md-6" id="mainColumn">
+
+      <!-- Column 2 Code Here -->
+      <div id="board">
+        <canvas id="canvas" height="320px" width="320px">
+        </canvas>
+      </div>
+      <div id="boardEnd"></div>
+    </div>
+
+  </div> <!-- class="row" -->
+</div> <!-- class="container" -->
+
+</body>
+
+</html>
